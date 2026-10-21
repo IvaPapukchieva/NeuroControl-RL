@@ -15,7 +15,7 @@ class Lowpass:
     """
     A low pass filter, that remembers the previous states
     """
-    def __init__(self, fs, cutoff):
+    def __init__(self, fs=1000, cutoff=0.5):
         self.a = math.exp(-2*math.pi*cutoff/fs)
         self.y = 0.0
 
@@ -90,6 +90,10 @@ class FeatureExtractor:
         self.bp_low.reset()
         self.bp_high.reset()
         self.smoother.reset()
+
+        self.last_low = 0.0
+        self.last_high = 0.0
+        self.last_power = 0.0
 
 
 
