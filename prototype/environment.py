@@ -8,6 +8,7 @@ actions, formula from the paper))
 """
 
 import numpy as np
+import math
 from tvb.simulator.integrators import EulerStochastic
 from tvb.simulator.noise import Additive
 from tvb.simulator.models.epileptor import Epileptor
@@ -67,3 +68,22 @@ for step in range(simulation_length):
 
     # Update filters and state estimate
     # Apply scheduled stimulation pulse to z
+
+
+
+
+
+# reward function 
+# smoothed_power - LPF(bp), amplitude - Sa, ipi_seconds - simulation inter-pulse interval
+# Note: if we use a negative weight we can also do log(smoothed_power - cost) 
+# or we can do log(smoothed_power + cost) 
+
+def calculate_reward(smoothed_power,amplitude, ipi_seconds, cw ):
+    if amplitude == 0:
+        cost = 0.0
+    else:
+        if ipi_seconds <= 0:
+            raise ValueError("Stimulation interval must be positive")
+        cost = cw * (amplitude**2 * (1/ipi_seconds))
+
+    return -math.log(max(smoothed_power, 1e-12)) - cost 
