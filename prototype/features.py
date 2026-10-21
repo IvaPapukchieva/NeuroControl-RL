@@ -35,6 +35,7 @@ def lfp(state):
     The measurement of the state (local state potential)
     -x1+x2
     """
+    
     s = np.ravel(state)
     return -s[0] + s[3]
 

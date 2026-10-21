@@ -10,8 +10,9 @@ actions, formula from the paper))
 import numpy as np
 from tvb.simulator.integrators import EulerStochastic
 from tvb.simulator.noise import Additive
-from prototype.epileptor import NagarajEpileptor
 from tvb.simulator.models.epileptor import Epileptor
+from prototype.epileptor import NagarajEpileptor
+from prototype.features import lfp
 
 time_step = 0.001       #1 ms, Nagaraj (2017)
 simulation_length = 15000 # ms, 15 seconds
@@ -62,7 +63,7 @@ for step in range(simulation_length):
     print_state(state, step)
 
     # Generate LFP and update RL variables here
-    #lfp = generate_lfp(state)
+    print(lfp(state))
 
     # Update filters and state estimate
     # Apply scheduled stimulation pulse to z
