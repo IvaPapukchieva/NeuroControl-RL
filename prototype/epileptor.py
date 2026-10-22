@@ -3,6 +3,7 @@ Five equations plus the ODE integration (Euler–Maruyama integrator with a
 time step of 1 ms) as step() that advances the model
 - Takes x1,x2 blabla z
 - Outputs the updated state
+#CHANGE HERE means change to the original paper so  that the figures are  reproducible
 """
 
 import numpy as np
@@ -56,13 +57,15 @@ class NagarajEpileptor(Model):
         f1 = np.where(
             x1 < 0.0,
             x1**3 - 3.0 * x1**2,
-            x2 - 0.6 * (z - 4.0)**2 * x1,
+            #CHANGE HERE: added parentheses
+            (x2 - 0.6 * (z - 4.0)**2) * x1,
         )
 
         f2 = np.where(
             x2 < -0.25,
             0.0,
-            6.0 * (x2 + 0.25) * x1,
+            #CHANGE HERE:  deleated the *x1
+            6.0 * (x2 + 0.25), #* x1,
         )
 
         # Slow variable target function
@@ -71,9 +74,12 @@ class NagarajEpileptor(Model):
         )
 
         # Differential equations
-        dx1 = (y1 - f1 - z) / self.tau1
+        #CHANGES HERE: I1 deleated from dz and added to dx1
+        #dx1 = (y1 - f1 - z) / self.tau1
+        dx1 = (y1 - f1 - z + self.I1) / self.tau1
         dy1 = (1.0 - 5.0 * x1**2 - y1) / self.tau1
-        dz = (h - z - self.I1) / self.tau0
+        #dz = (h - z - self.I1) / self.tau0
+        dz = (h - z) / self.tau0
 
         dx2 = (
             -y2 + x2 - x2**3

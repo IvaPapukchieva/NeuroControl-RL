@@ -9,22 +9,23 @@ All the bandpass filters to produce the reward signal
 import math
 
 import numpy as np
+from scipy.signal import butter, sosfilt, sosfilt_zi
 
 
-class Lowpass:
-    """
-    A low pass filter, that remembers the previous states
-    """
-    def __init__(self, fs=1000, cutoff=0.5):
-        self.a = math.exp(-2*math.pi*cutoff/fs)
-        self.y = 0.0
 
-    def push(self,x):
-        """
-        advances the filter results throughout the simulation
-        """
-        self.y = self.a * self.y + (1 - self.a) * x
-        return self.y
+class ButterFilter:
+    def __init__(self, btype, cutoff, fs=1000.0, order=1):
+        self.sos = butter(order, cutoff, btype=btype, fs=fs, output="sos")
+        self.zi = None
+
+    def push(self, x):
+        if self.zi is None:
+            self.zi = sosfilt_zi(self.sos) * x
+        y, self.zi = sosfilt(self.sos, [x], zi=self.zi)
+        return y[0]
+
+    def reset(self):
+        self.zi = None
 
     def reset(self):
         self.y = 0.0
@@ -42,20 +43,18 @@ def lfp(state):
 
 class FeatureExtractor:
     def __init__(self, fs=1000.0):
-        self.fs = fs
-        self.lowPass = Lowpass(fs, 0.5)
-        self.highPass_helper = Lowpass(fs, 0.5)
-
-        #for the band pass
-        self.bp_low = Lowpass(fs, 2.0)
-        self.bp_high = Lowpass(fs, 15.0)
-
-        self.smoother = Lowpass(fs, 0.02)
+        self.lowPass = ButterFilter("lowpass", 0.5, fs)
+        self.highPass = ButterFilter("highpass", 0.5, fs)
+        self.bandPass = ButterFilter("bandpass", [2.0, 15.0], fs)
+        self.smoother = ButterFilter("lowpass", 0.02, fs)
 
         #for agent decisions
         self.last_low = 0.0
         self.last_high = 0.0
         self.last_power = 0.0
+
+        self.threshold = 0.0
+        self.ictal = False
 
     def push(self, state):
         """
@@ -63,12 +62,13 @@ class FeatureExtractor:
         """
         x = lfp(state)
 
-        #state parts (low and high freq)
+        #state estimate signal parts (low and high freq)
         self.last_low = self.lowPass.push(x)
-        self.last_high = x - self.highPass_helper.push(x)
+        self.ictal = self.last_low < self.threshold
+        self.last_high = self.highPass.push(x)
 
         #reward signal part
-        band = self.bp_high.push(x - self.bp_low.push(x))
+        band = self.bandPass.push(x)
         self.last_power = self.smoother.push(band * band)
 
     def read_out(self):
@@ -78,22 +78,21 @@ class FeatureExtractor:
         return self.get_state(), self.last_power
 
     def get_state(self):
-        #todo
-        raise NotImplementedError
+        return int(self.ictal)
 
     def reset(self):
         """
         Resets the filter memory (in case we need it at some point)
         """
         self.lowPass.reset()
-        self.highPass_helper.reset()
-        self.bp_low.reset()
-        self.bp_high.reset()
+        self.highPass.reset()
+        self.bandPass.reset()
         self.smoother.reset()
 
         self.last_low = 0.0
         self.last_high = 0.0
         self.last_power = 0.0
+        self.ictal = False
 
 
 
