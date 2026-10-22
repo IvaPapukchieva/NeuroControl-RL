@@ -91,7 +91,8 @@ def detector_threshold(band_power, seizure_mask):
     Threshold for DetectorTriggered, set once from a no-stimulation run and then fixed.
 
     band_power:   smoothed 2-15 Hz power per window (what the detector sees)
-    seizure_mask: True for windows that were seizing (ground truth, see metrics.py)
+    seizure_mask: True for windows that were seizing (ground truth, from
+                  metrics.window_labels(metrics.seizure_mask(...)))
 
     Returns the midpoint in log space between the median power during and
     between seizures (power spans orders of magnitude, so the log midpoint is fairer).
