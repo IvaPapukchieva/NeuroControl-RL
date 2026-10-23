@@ -15,14 +15,15 @@ from tvb.simulator.models.epileptor import Epileptor
 from prototype.epileptor import NagarajEpileptor
 from prototype.features import lfp, FeatureExtractor
 from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizure_signals
+from prototype.config import CONFIGS, SimulationConfig
+from prototype.simulator import Simulator
 
-time_step = 0.01       #1 ms, Nagaraj (2017)
-simulation_length = 15000 # ms, 15 seconds
-fs = 1.0 / time_step
+config = CONFIGS["fast"]
+
 
 def print_state(state, step):
     print(
-        f"t = {(step) * time_step:.3f} ms | "
+        f"t = {(step) * simulator.config.step_size:.3f} ms | "
         f"x1={state[0, 0, 0]:.6f}, "
         f"y1={state[1, 0, 0]:.6f}, "
         f"z={state[2, 0, 0]:.6f}, "
@@ -35,80 +36,50 @@ def print_state(state, step):
     if not np.all(np.isfinite(state)):
         raise RuntimeError(f"Non-finite state at step {step}")
 
-def run_simulation(simulation_length = 15000, time_step = 0.001, fs=1000.0):
+def run_simulation(config: SimulationConfig):
 
-    total_steps = int(simulation_length / time_step)
-    print(f"Running simulation for {simulation_length} ms with {total_steps} steps of {time_step} ms each.")
-
-    model = Epileptor()
-    model.configure()
-    print("Original r:", model.r)
-
-    # Change r = 1/\tau0, tau0 = 800 ms, Nagaraj(2017)
-    # or r = 0.00035 Jirsa(2014)
-    model.r = np.array([0.00125]) 
-
-    # TVB integrator dt is in milliseconds
-    # define noise according to Jirsa(2014)
-    noise_nsig = np.array([
-        0.0,  # x1
-        0.0,  # y1
-        0.0,    # z
-        1e-3,   # x2
-        1e-3,   # y2
-        0.0,    # g
-    ]).reshape(6, 1, 1)
-    integrator = EulerStochastic(
-        dt=time_step,
-        noise=Additive(nsig=noise_nsig, noise_seed=42),
-    )
-    integrator.configure()
-    integrator.noise.dt = integrator.dt
-
-    # State shape: (variables, nodes, modes)
-    state = np.zeros((6, 1, 1))
-    state[:, 0, 0] = [0.0, -5.0, 3.0, 0.0, 0.0, 0.0]  # t(0) state, Jirsa(2014)
-
-    coupling = np.zeros((1, 1, 1))
-    local_coupling = 0.0
-    stimulus = np.zeros_like(state)
-
+    simulator = Simulator(config)
+    print("Initial state:", simulator.state)
+    print("Total steps:", simulator.total_steps)
     #Initialize return arrays for LFP and features
-    fe = FeatureExtractor(fs=fs)
-    low, high, last_power, x1, x2, z = [], [], [], [], [], []
-    lfp_values = []
+    fe = FeatureExtractor(fs=config.fs)
+    low, high, last_power = [], [], [] 
+    x1, x2, z, lfp_values = [], [], [], []
 
     s = 0
-    for step in range(total_steps):
-        state = integrator.scheme(
-            state, model.dfun, coupling, local_coupling, stimulus
-        )
-
+    steps_per_sampple = int(config.sampling_interval / config.step_size)
+    for step in range(simulator.total_steps):
+        state = simulator.next_state()
 
         # Generate LFP every 1 ms
-        if step % int(1.0 / time_step) == 0:
+        if (step+1) % steps_per_sampple == 0:
             print(f"{s}/15000")
             s+=1
+            # Get LFP signal from the current state
             signal = lfp(state)
             lfp_values.append(signal)
-            # Update filters and state estimate
-            fe.push(state)
-            low.append(fe.last_low)
-            high.append(fe.last_high)
-            last_power.append(fe.last_power)
+            # Append state for data
             x1.append(state[0, 0, 0])
             x2.append(state[3, 0, 0])
             z.append(state[2, 0, 0])
 
+            # Update filters and state estimate
+            fe.push(state)
+            # Append filtered signal for data
+            low.append(fe.last_low)
+            high.append(fe.last_high)
+            last_power.append(fe.last_power)
+            
+
         # Apply scheduled stimulation pulse to z
 
         # return filtered data
-    print("Expected samples:", simulation_length)
+    print("Expected samples:", config.simulation_length)
     print("LFP samples:", len(lfp_values))
     print("Feature samples:", len(low), len(high), len(last_power))
     print("z samples:", len(z))
     return {
-        "time": np.arange(simulation_length) * time_step,
+        "time": np.arange(1, len(lfp_values) + 1) * config.sampling_interval,
         "low": np.array(low),
         "high": np.array(high),
         "last_power": np.array(last_power),
@@ -118,7 +89,7 @@ def run_simulation(simulation_length = 15000, time_step = 0.001, fs=1000.0):
         "lfp": np.array(lfp_values),
     }
 
-data = run_simulation(simulation_length=simulation_length, time_step=time_step)
+data = run_simulation(config)
 
 # plot_state_space(data)
 plot_seizure_signals(data)
