@@ -37,13 +37,18 @@ class Simulator:
         self.local_coupling = 0.0
         self.stimulus = np.zeros_like(self.state)
 
-    def next_state(self):
-        """Advance the simulation by one integration step."""
+    def next_state(self, new_stimulus=None):
+        stimulus = (
+            self.stimulus
+            if new_stimulus is None
+            else new_stimulus
+        )
+
         self.state = self.integrator.scheme(
             self.state,
             self.model.dfun,
             self.coupling,
             self.local_coupling,
-            self.stimulus,
+            stimulus,
         )
         return self.state

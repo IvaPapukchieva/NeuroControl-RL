@@ -7,7 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class SimulationConfig:
     simulation_length: float = 15000.0  # ms
-    step_size: float = 0.001            # ms, integration timestep
+    step_size: float = 0.001            # == 1ms, integration timestep
     sampling_interval: float = 1.0      # ms
     r: float = 0.00035                  # Jirsa(2014) default
     noise_seed: int = 42

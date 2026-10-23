@@ -48,11 +48,21 @@ def run_simulation(config: SimulationConfig):
 
     s = 0
     steps_per_sampple = int(config.sampling_interval / config.step_size)
+
+    # Define stimulus to z:
+    stimulus_strength = 0.5
+    stimulus = np.zeros_like(simulator.state)
     for step in range(simulator.total_steps):
-        state = simulator.next_state()
+
+        sample_timer = step % steps_per_sampple
+        # Apply scheduled stimulation pulse to z
+        # Example: Every second we apply a stimulus pulse to z for 10 ms (10 steps)
+        if sample_timer < 10:
+            stimulus[2, 0, 0] = stimulus_strength # apply stimulus to z
+        state = simulator.next_state(new_stimulus=stimulus)
 
         # Generate LFP every 1 ms
-        if (step+1) % steps_per_sampple == 0:
+        if sample_timer == 0:
             print(f"{s}/15000")
             s+=1
             # Get LFP signal from the current state
@@ -71,13 +81,12 @@ def run_simulation(config: SimulationConfig):
             last_power.append(fe.last_power)
             
 
-        # Apply scheduled stimulation pulse to z
 
-        # return filtered data
     print("Expected samples:", config.simulation_length)
     print("LFP samples:", len(lfp_values))
     print("Feature samples:", len(low), len(high), len(last_power))
     print("z samples:", len(z))
+    # return filtered data
     return {
         "time": np.arange(1, len(lfp_values) + 1) * config.sampling_interval,
         "low": np.array(low),
