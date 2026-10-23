@@ -9,10 +9,6 @@ actions, formula from the paper))
 
 import numpy as np
 import math
-from tvb.simulator.integrators import EulerStochastic
-from tvb.simulator.noise import Additive
-from tvb.simulator.models.epileptor import Epileptor
-from prototype.epileptor import NagarajEpileptor
 from prototype.features import lfp, FeatureExtractor
 from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizure_signals
 from prototype.config import CONFIGS, SimulationConfig
@@ -50,7 +46,7 @@ def run_simulation(config: SimulationConfig):
     steps_per_sampple = int(config.sampling_interval / config.step_size)
 
     # Define stimulus to z:
-    stimulus_strength = 0.5
+    stimulus_strength = 0.0
     stimulus = np.zeros_like(simulator.state)
     for step in range(simulator.total_steps):
 
@@ -101,7 +97,8 @@ def run_simulation(config: SimulationConfig):
 data = run_simulation(config)
 
 # plot_state_space(data)
-plot_seizure_signals(data)
+# plot_seizure_signals(data)
+plot_seizure_trajectory(data)
 
 # reward function 
 # smoothed_power - LPF(bp), amplitude - Sa, ipi_seconds - simulation inter-pulse interval

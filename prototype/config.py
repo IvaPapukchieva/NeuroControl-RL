@@ -67,8 +67,18 @@ CONFIGS = {
         noise_seed=42,
     ),
 
-    "short_test": SimulationConfig(
-        simulation_length=1000.0,
-        step_size=0.01,
+    "nagaraj_2017": SimulationConfig(
+        r=0.00125, # 800s or 400s => r = 0.0025
+        noise_seed=42,
+        initial_state=(0.0, -5.0, 3.0, 0.0, 0.0, 0.0),
+        noise_nsig=(0.0, 0.0, 0.0, 1e-3, 1e-3, 0.0),
+    ),
+    
+    "jirsa_2014_p31_case1": SimulationConfig(
+        step_size=0.001,
+        r=0.00125, # 800s or 400s => r = 0.0025
+        noise_seed=42,
+        initial_state=(0.022, 0.91, 3.84, -1.11, 0.73, 0.0),
+        noise_nsig=(0.0003125, 0.0003125, 0.0, 0.005, 0.005, 0.0),
     ),
 }
