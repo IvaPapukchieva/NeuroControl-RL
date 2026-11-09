@@ -15,14 +15,28 @@ class Simulator:
             config.simulation_length / config.step_size
         )
 
-        self.model = Epileptor()
+        self.model = config.model_class()
+
+        # Apply model-specific parameters
+        for name, value in config.model_params.items():
+            if not hasattr(self.model, name):
+                raise ValueError(f"Unknown model parameter: {name}")
+
+            setattr(
+                self.model,
+                name,
+                np.atleast_1d(value),
+            )
+
         self.model.configure()
-        self.model.r = np.array([config.r])
+
+        # Infer model dimensions
+        nvar = self.model.nvar
 
         self.integrator = EulerStochastic(
             dt=config.step_size,
             noise=Additive(
-                nsig=config.noise_array,
+                nsig=config.noise_array(nvar),
                 noise_seed=config.noise_seed,
             ),
         )
@@ -30,10 +44,12 @@ class Simulator:
         self.integrator.noise.dt = self.integrator.dt
 
         # State shape: (variables, nodes, modes)
-        self.state = config.initial_state_array.copy()
+        self.state = config.state_array(nvar).copy()
 
         # These 3 are not necessary for a single node simulation, but are included for completeness
-        self.coupling = np.zeros((1, 1, 1))
+        self.coupling = np.zeros(
+            (len(self.model.cvar), 1, 1)
+        )
         self.local_coupling = 0.0
         self.stimulus = np.zeros_like(self.state)
 

@@ -14,7 +14,7 @@ from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizu
 from prototype.config import CONFIGS, SimulationConfig
 from prototype.simulator import Simulator
 
-config = CONFIGS["no_noise"]
+config = CONFIGS["chizhov_2018"]
 
 
 def print_state(state, step):
