@@ -14,7 +14,7 @@ from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizu
 from prototype.config import CONFIGS, SimulationConfig
 from prototype.simulator import Simulator
 
-config = CONFIGS["fast"]
+config = CONFIGS["no_noise"]
 
 
 def print_state(state, step):
@@ -59,7 +59,7 @@ def run_simulation(config: SimulationConfig):
 
         # Generate LFP every 1 ms
         if sample_timer == 0:
-            print(f"{s}/15000")
+            print(f"{s}/{config.simulation_length}")
             s+=1
             # Get LFP signal from the current state
             signal = lfp(state)
@@ -97,7 +97,7 @@ def run_simulation(config: SimulationConfig):
 data = run_simulation(config)
 
 # plot_state_space(data)
-# plot_seizure_signals(data)
+plot_seizure_signals(data)
 plot_seizure_trajectory(data)
 
 # reward function 

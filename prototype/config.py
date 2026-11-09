@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 @dataclass
 class SimulationConfig:
-    simulation_length: float = 15000.0  # ms
+    simulation_length: float = 5000.0  # ms
     step_size: float = 0.001            # == 1ms, integration timestep
     sampling_interval: float = 1.0      # ms
     r: float = 0.00035                  # Jirsa(2014) default
@@ -64,21 +64,31 @@ CONFIGS = {
 
     "jirsa_2014": SimulationConfig(
         r=0.00035,
+        step_size=0.01,
         noise_seed=42,
     ),
 
     "nagaraj_2017": SimulationConfig(
         r=0.00125, # 800s or 400s => r = 0.0025
         noise_seed=42,
+        step_size=0.001,
         initial_state=(0.0, -5.0, 3.0, 0.0, 0.0, 0.0),
         noise_nsig=(0.0, 0.0, 0.0, 1e-3, 1e-3, 0.0),
     ),
     
     "jirsa_2014_p31_case1": SimulationConfig(
-        step_size=0.001,
-        r=0.00125, # 800s or 400s => r = 0.0025
+        step_size=0.01,
+        r = 0.00035,
         noise_seed=42,
         initial_state=(0.022, 0.91, 3.84, -1.11, 0.73, 0.0),
         noise_nsig=(0.0003125, 0.0003125, 0.0, 0.005, 0.005, 0.0),
+    ),
+
+    "no_noise": SimulationConfig(
+        step_size=0.01,
+        r = 0.00035,
+        noise_seed=42,
+        initial_state=(0.022, 0.91, 3.84, -1.11, 0.73, 0.0),
+        noise_nsig=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
     ),
 }

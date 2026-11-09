@@ -5,7 +5,7 @@ from tvb.simulator.integrators import EulerStochastic
 from tvb.simulator.noise import Additive
 
 from prototype.config import SimulationConfig
-
+from prototype.epileptor import NagarajEpileptor
 
 class Simulator:
     def __init__(self, config: SimulationConfig):
