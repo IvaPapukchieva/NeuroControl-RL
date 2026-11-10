@@ -56,11 +56,11 @@ class FeatureExtractor:
         self.threshold = 0.0
         self.ictal = False
 
-    def push(self, state):
+    def push(self, signal: float):
         """
         called per every simulation step
         """
-        x = lfp(state)
+        x = signal
 
         #state estimate signal parts (low and high freq)
         self.last_low = self.lowPass.push(x)

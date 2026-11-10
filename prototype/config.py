@@ -104,4 +104,24 @@ CONFIGS = {
         initial_state=(3.0, 10.0, 0.0, 1.0),
         noise_nsig=(0.0, 0.0, 31.25, 0.0),
     ),
+    "chizhov_2018_fast": SimulationConfig(
+        model_class=ChizhovEpileptor2,
+        model_params={"tau_K": 100_000.0},
+        simulation_length=240_000.0,
+        step_size=0.1,
+        sampling_interval=1.0,
+        initial_state=(3.0, 10.0, 0.0, 1.0),
+        noise_nsig=(0.0, 0.0, 8.5, 0.0),
+    ),
+    "chizhov_2018_tk10": SimulationConfig(
+        model_class=ChizhovEpileptor2,
+        model_params={
+            "tau_K": 10_000.0,
+        },
+        simulation_length=240_000.0,
+        step_size=0.1,
+        sampling_interval=1.0,
+        initial_state=(3.0, 10.0, 0.0, 1.0),
+        noise_nsig=(0.0, 0.0, 8.5, 0.0),
+    ),
 }

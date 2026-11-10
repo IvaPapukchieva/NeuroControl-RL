@@ -9,12 +9,12 @@ actions, formula from the paper))
 
 import numpy as np
 import math
-from prototype.features import lfp, FeatureExtractor
-from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizure_signals
+from prototype.features import FeatureExtractor
+from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizure_signals, plot_observed_signal, plot_population_diagnostics, diagnose_chizhov, plot_fig3, plot_synaptic_resource, plot_kbath
 from prototype.config import CONFIGS, SimulationConfig
 from prototype.simulator import Simulator
 
-config = CONFIGS["chizhov_2018"]
+config = CONFIGS["chizhov_2018_fast"]
 
 
 def print_state(state, step):
@@ -32,73 +32,201 @@ def print_state(state, step):
     if not np.all(np.isfinite(state)):
         raise RuntimeError(f"Non-finite state at step {step}")
 
-def run_simulation(config: SimulationConfig):
+def run_simulation(config: SimulationConfig, potassium_ramp: bool = True):
 
     simulator = Simulator(config)
     print("Initial state:", simulator.state)
     print("Total steps:", simulator.total_steps)
+
+    sim = Simulator(config)
+
+    for name in (
+        "tau_K", "tau_Na", "tau_m", "tau_D",
+        "K_bath", "rho", "gamma",
+        "delta_K", "delta_Na", "delta_D",
+        "nu_max", "V_th", "k_nu",
+        "gK_ratio", "Gsyn_ratio",
+    ):
+        print(f"{name:15s} = {getattr(sim.model, name)}")
+
+    print("dt =", sim.integrator.dt)
+    print("noise nsig =", sim.integrator.noise.nsig)
+
+    observer = simulator.observer
+
+    observer_voltage = []
+    observer_spikes = []
+    observer_spike_times = []
+
     #Initialize return arrays for LFP and features
     fe = FeatureExtractor(fs=config.fs)
-    low, high, last_power = [], [], [] 
-    x1, x2, z, lfp_values = [], [], [], []
+
 
     s = 0
-    steps_per_sampple = int(config.sampling_interval / config.step_size)
+    steps_per_sample = round(config.sampling_interval / config.step_size)
+
+    if not np.isclose(
+        steps_per_sample * config.step_size,
+        config.sampling_interval,
+    ):
+        raise ValueError(
+            "sampling_interval must be a multiple of step_size"
+        )
+
+    times = []
+    states = []
+    lfp_values = []
+    low, high, last_power = [], [], []
 
     # Define stimulus to z:
     stimulus_strength = 0.0
     stimulus = np.zeros_like(simulator.state)
+
     for step in range(simulator.total_steps):
 
-        sample_timer = step % steps_per_sampple
+        # Reset stimulation every integration step
+        stimulus.fill(0.0)
         # Apply scheduled stimulation pulse to z
         # Example: Every second we apply a stimulus pulse to z for 10 ms (10 steps)
-        if sample_timer < 10:
-            stimulus[2, 0, 0] = stimulus_strength # apply stimulus to z
-        state = simulator.next_state(new_stimulus=stimulus)
+        # if sample_timer < 10:
+        #     stimulus[2, 0, 0] = stimulus_strength # apply stimulus to z
+        
+        previous_state = simulator.state.copy()
+        if potassium_ramp:
+            t_ms = step * config.step_size
+            fraction = np.clip(t_ms / 200_000.0, 0.0, 1.0)
+
+            simulator.model.K_bath = np.array([
+                3.0 + 19.0 * fraction
+            ])
+        state = simulator.next_state(
+            new_stimulus=stimulus
+        )
+        t = (step + 1) * config.step_size
+
+        # Update observer at every integration step
+        if observer is not None:
+            U, spiked = observer.step(
+                previous_state=previous_state,
+                next_state=state,
+                dt=config.step_size,
+                tau_m=float(simulator.model.tau_m[0]),
+            )
+
+            if spiked:
+                observer_spike_times.append(t)
+
 
         # Generate LFP every 1 ms
-        if sample_timer == 0:
-            print(f"{s}/{config.simulation_length}")
-            s+=1
-            # Get LFP signal from the current state
-            signal = lfp(state)
-            lfp_values.append(signal)
-            # Append state for data
-            x1.append(state[0, 0, 0])
-            x2.append(state[3, 0, 0])
-            z.append(state[2, 0, 0])
+        if (step + 1) % steps_per_sample != 0:
+            continue
 
-            # Update filters and state estimate
-            fe.push(state)
-            # Append filtered signal for data
-            low.append(fe.last_low)
-            high.append(fe.last_high)
-            last_power.append(fe.last_power)
+        if observer is not None:
+            observer_voltage.append(U)
+            observer_spikes.append(spiked)
+
+        #print(f"{s}/{config.simulation_length}")
+        s+=1
+
+        # Get LFP signal from the current state
+        signal = U if observer is not None else lfp(state)
+
+        times.append(t)
+        states.append(state.copy())
+        lfp_values.append(signal)
+
+        # Update filters and state estimate
+        fe.push(signal)
+
+        # Append filtered signal for data
+        low.append(fe.last_low)
+        high.append(fe.last_high)
+        last_power.append(fe.last_power)
             
 
 
     print("Expected samples:", config.simulation_length)
     print("LFP samples:", len(lfp_values))
     print("Feature samples:", len(low), len(high), len(last_power))
-    print("z samples:", len(z))
     # return filtered data
     return {
-        "time": np.arange(1, len(lfp_values) + 1) * config.sampling_interval,
-        "low": np.array(low),
-        "high": np.array(high),
-        "last_power": np.array(last_power),
-        "x1": np.array(x1),
-        "x2": np.array(x2),
-        "z": np.array(z),
-        "lfp": np.array(lfp_values),
+        "time": np.asarray(times),
+        "states": np.stack(states),
+        "state_variables": simulator.model.state_variables,
+        "lfp": np.asarray(lfp_values),
+        "low": np.asarray(low),
+        "high": np.asarray(high),
+        "power": np.asarray(last_power),
+        "observer_voltage": (
+            np.asarray(observer_voltage) if observer is not None else None
+        ),
+        "observer_spikes": (
+            np.asarray(observer_spikes) if observer is not None else None
+        ),
+        "observer_spike_times": (
+            np.asarray(observer_spike_times) if observer is not None else None
+        ),
     }
 
 data = run_simulation(config)
 
-# plot_state_space(data)
-plot_seizure_signals(data)
+diagnose_chizhov(data)
+plot_fig3(data)
+plot_population_diagnostics(data)
+plot_synaptic_resource(data)
+#plot_seizure_signals(data)
+
+states = data["states"]
+t = data["time"] / 1000.0
+
+K = states[:, 0, 0, 0]
+Na = states[:, 1, 0, 0]
+V = states[:, 2, 0, 0]
+D = states[:, 3, 0, 0]
+
+mask = t > 50
+
+print("Mean V:", V[mask].mean())
+print("Median V:", np.median(V[mask]))
+print("V percentiles:", np.percentile(V[mask], [5, 25, 50, 75, 95, 99]))
+
+nu = 100 * np.maximum(np.tanh((V - 25) / 20), 0)
+
+print("Mean D during firing:", D[mask & (nu > 0)].mean())
+print("Mean D during silence:", D[mask & (nu == 0)].mean())
+
+pump = 0.2 / (
+    (1.0 + np.exp(3.5 - K))
+    * (1.0 + np.exp((25.0 - Na) / 3.0))
+)
+
+mask = t > 50.0
+
+# Sodium fluxes in mM/s
+sodium_leak = (10.0 - Na) / 20.0
+sodium_pump = -3.0 * pump
+sodium_spikes = 0.03 * nu
+
+print("Sodium leak:", sodium_leak[mask].mean())
+print("Sodium pump:", sodium_pump[mask].mean())
+print("Sodium spikes:", sodium_spikes[mask].mean())
+print(
+    "Net sodium flux:",
+    (sodium_leak[mask] + sodium_pump[mask] + sodium_spikes[mask]).mean()
+)
+S = 5.0 * nu * (D - 0.5)
+
+active = mask & (nu > 0)
+
+print("Mean synaptic input during firing:", S[active].mean())
+print("Fraction of firing with D < 0.5:",
+      np.mean(D[active] < 0.5))
+print("Minimum D:", D[mask].min())
+print("Maximum D:", D[mask].max())
+#plot_state_space(data)
 plot_seizure_trajectory(data)
+plot_kbath(data)
+plot_observed_signal(data, show_spikes=False)
 
 # reward function 
 # smoothed_power - LPF(bp), amplitude - Sa, ipi_seconds - simulation inter-pulse interval

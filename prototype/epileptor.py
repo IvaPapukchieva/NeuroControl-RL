@@ -232,8 +232,7 @@ class ChizhovEpileptor2(Model):
 
         # Firing rate (Hz)
         nu = self.nu_max * np.maximum(
-            2.0 / (1.0 + np.exp(-2.0 * (V - self.V_th) / self.k_nu))
-            - 1.0,
+            np.tanh((V - self.V_th) / self.k_nu),
             0.0,
         )
 

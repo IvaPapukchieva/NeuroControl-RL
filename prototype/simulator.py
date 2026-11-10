@@ -5,7 +5,9 @@ from tvb.simulator.integrators import EulerStochastic
 from tvb.simulator.noise import Additive
 
 from prototype.config import SimulationConfig
-from prototype.epileptor import NagarajEpileptor
+from prototype.epileptor import NagarajEpileptor, ChizhovEpileptor2
+from prototype.features import lfp
+from prototype.observer import ChizhovObserver
 
 class Simulator:
     def __init__(self, config: SimulationConfig):
@@ -16,6 +18,12 @@ class Simulator:
         )
 
         self.model = config.model_class()
+
+        self.observer = (
+            ChizhovObserver(gL_nS=20.0)
+            if isinstance(self.model, ChizhovEpileptor2)
+            else None
+        )
 
         # Apply model-specific parameters
         for name, value in config.model_params.items():
@@ -68,3 +76,14 @@ class Simulator:
             stimulus,
         )
         return self.state
+
+    def observe_lfp(self, state):
+        if isinstance(self.model, ChizhovEpileptor2):
+            return float(state[2, 0, 0])  # Population voltage V
+
+        if isinstance(self.model, Epileptor):
+            return float(lfp(state))       # Existing Jirsa proxy
+
+        raise NotImplementedError(
+            f"No LFP observation defined for {type(self.model).__name__}"
+        )
