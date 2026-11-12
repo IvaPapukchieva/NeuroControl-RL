@@ -419,3 +419,179 @@ def plot_kbath(data):
     plt.legend()
     plt.grid(alpha=0.25)
     plt.show()
+
+def plot_chizhov_phase_portrait(data, model):
+    time = np.asarray(data["time"])
+    states = np.asarray(data["states"])
+    variables = list(data["state_variables"])
+
+    V = states[:, variables.index("V"), 0, 0]
+    D = states[:, variables.index("x_D"), 0, 0]
+
+    # Extract scalar parameters from TVB model traits
+    def param(name):
+        return float(np.asarray(getattr(model, name)).item())
+
+    tau_m = param("tau_m")
+    tau_D = param("tau_D")
+    delta_D = param("delta_D")
+    nu_max = param("nu_max")
+    V_th = param("V_th")
+    k_nu = param("k_nu")
+    Gsyn_ratio = param("Gsyn_ratio")
+    gK_ratio = param("gK_ratio")
+    K0 = param("K_0")
+
+    # Potassium values used in the original phase portrait
+    K_field = 3.0
+    K_shifted = 13.0
+
+    def firing_rate(v):
+        return nu_max * np.maximum(
+            np.tanh((v - V_th) / k_nu), 0.0
+        )
+
+    def vector_field(v, d, k=K_field):
+        nu = firing_rate(v)
+
+        potassium_input = (
+            gK_ratio * 26.6 * np.log(k / K0)
+        )
+        synaptic_input = (
+            Gsyn_ratio * nu * (d - 0.5)
+        )
+
+        dv = (-v + potassium_input + synaptic_input) / tau_m
+        dd = (1.0 - d) / tau_D - delta_D * d * nu / 1000.0
+
+        return dv, dd
+
+    # Deterministic vector field
+    V_grid = np.linspace(-30, 260, 38)
+    D_grid = np.linspace(0.5, 1.0, 22)
+    VV, DD = np.meshgrid(V_grid, D_grid)
+
+    FV, FD = vector_field(VV, DD)
+
+    # Normalize arrow lengths in display coordinates
+
+    norm = np.hypot(FV, FD)
+
+    arrow_V = np.divide(
+        FV, norm,
+        out=np.zeros_like(FV),
+        where=norm > 0,
+    )
+    arrow_D = np.divide(
+        FD, norm,
+        out=np.zeros_like(FD),
+        where=norm > 0,
+    )
+
+    # Nullclines
+    V_line = np.linspace(-30, 260, 3000)
+    nu_line = firing_rate(V_line)
+
+    # dD/dt = 0
+    D_null = 1.0 / (
+        1.0 + tau_D * delta_D * nu_line / 1000.0
+    )
+
+    # dV/dt = 0
+    D_V_null = np.full_like(V_line, np.nan)
+    D_V_null_shifted = np.full_like(V_line, np.nan)
+
+    active = nu_line > 1e-8
+
+    potassium_input = (
+        gK_ratio * 26.6 * np.log(K_field / K0)
+    )
+    potassium_shift = (
+        gK_ratio * 26.6 * np.log(K_shifted / K0)
+    )
+
+    D_V_null[active] = (
+        0.5
+        + (V_line[active] - potassium_input)
+        / (Gsyn_ratio * nu_line[active])
+    )
+    D_V_null_shifted[active] = (
+        0.5
+        + (V_line[active] - potassium_shift)
+        / (Gsyn_ratio * nu_line[active])
+    )
+
+    # Plot
+    fig, axes = plt.subplots(
+        1, 2,
+        figsize=(15, 5.5),
+        gridspec_kw={"width_ratios": [1.1, 1]},
+    )
+
+    # Panel A: phase portrait
+    ax = axes[0]
+
+    ax.quiver(
+        VV, DD, arrow_V, arrow_D,
+        color="0.5",
+        angles="xy",
+        scale_units="xy",
+        scale=0.1,
+        width=0.002,
+        alpha=0.7,
+    )
+
+    ax.plot(
+        V_line, D_null,
+        color="red", lw=2,
+        label=r"$\dot{x}_D=0$",
+    )
+
+    ax.plot(
+        V_line, D_V_null,
+        color="darkred", lw=2,
+        label=rf"$\dot V=0,\ K_o={K_field:g}$",
+    )
+
+    ax.plot(
+        V_line, D_V_null_shifted,
+        color="red", ls="--", lw=2,
+        label=rf"$\dot V=0,\ K_o={K_shifted:g}$",
+    )
+
+    ax.plot(
+        V[::10], D[::10],
+        color="purple", lw=0.5, alpha=0.6,
+        label="Stochastic trajectory",
+    )
+
+    ax.plot(
+        [potassium_shift, potassium_shift],
+        [0.5, 1.0],
+        color="red", ls="--", lw=2,
+    )
+
+    ax.set_xlim(-30, 260)
+    ax.set_ylim(0.5, 1.02)
+    ax.set_xlabel("V (mV)")
+    ax.set_ylabel(r"$x_D$")
+    ax.set_title("A — Fast subsystem phase portrait")
+    ax.legend(fontsize=8)
+
+    # Panel B: time series
+    ax = axes[1]
+
+    ax.plot(time, V, lw=0.5, label="V (mV)")
+    ax.set_xlabel("Time (ms)")
+    ax.set_ylabel("V (mV)")
+    ax.set_title("B — Stochastic trajectory")
+
+    ax2 = ax.twinx()
+    ax2.plot(time, D, color="purple", lw=1)
+    ax2.set_ylabel(r"$x_D$")
+    ax2.set_ylim(0.5, 1.02)
+
+    fig.tight_layout()
+    plt.show()
+
+    return fig, axes

@@ -129,7 +129,7 @@ class ChizhovEpileptor2(Model):
     tau_m = NArray(
         default=np.array([10.0]),
         label="Membrane time constant",
-        doc="Population membrane polarization time constant (ms).",
+        doc="Population membrane polarization time constant (ms); equivalent to Capa in Mathematica implementation.",
     )
 
     tau_D = NArray(

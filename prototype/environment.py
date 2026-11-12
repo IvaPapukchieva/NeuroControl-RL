@@ -10,7 +10,9 @@ actions, formula from the paper))
 import numpy as np
 import math
 from prototype.features import FeatureExtractor
-from prototype.plot import plot_state_space, plot_seizure_trajectory, plot_seizure_signals, plot_observed_signal, plot_population_diagnostics, diagnose_chizhov, plot_fig3, plot_synaptic_resource, plot_kbath
+from prototype.plot import (plot_state_space, plot_seizure_trajectory, plot_seizure_signals, plot_observed_signal, 
+                            plot_population_diagnostics, diagnose_chizhov, plot_fig3, plot_synaptic_resource, plot_kbath,
+                            plot_chizhov_phase_portrait)
 from prototype.config import CONFIGS, SimulationConfig
 from prototype.simulator import Simulator
 
@@ -32,13 +34,11 @@ def print_state(state, step):
     if not np.all(np.isfinite(state)):
         raise RuntimeError(f"Non-finite state at step {step}")
 
-def run_simulation(config: SimulationConfig, potassium_ramp: bool = True):
+def run_simulation(config: SimulationConfig, potassium_ramp: bool = False):
 
     simulator = Simulator(config)
     print("Initial state:", simulator.state)
     print("Total steps:", simulator.total_steps)
-
-    sim = Simulator(config)
 
     for name in (
         "tau_K", "tau_Na", "tau_m", "tau_D",
@@ -47,11 +47,15 @@ def run_simulation(config: SimulationConfig, potassium_ramp: bool = True):
         "nu_max", "V_th", "k_nu",
         "gK_ratio", "Gsyn_ratio",
     ):
-        print(f"{name:15s} = {getattr(sim.model, name)}")
+        print(f"{name:15s} = {getattr(simulator.model, name)}")
 
-    print("dt =", sim.integrator.dt)
-    print("noise nsig =", sim.integrator.noise.nsig)
+    print("dt =", simulator.integrator.dt)
+    noise = simulator.integrator.noise
 
+    print("noise type =", type(noise).__name__)
+    print("noise strength =", noise.noise_strength)
+    print("noise seed =", noise.noise_seed)
+    print("noise sample interval (ms) =", noise.sample_interval)
     observer = simulator.observer
 
     observer_voltage = []
@@ -153,6 +157,7 @@ def run_simulation(config: SimulationConfig, potassium_ramp: bool = True):
         "time": np.asarray(times),
         "states": np.stack(states),
         "state_variables": simulator.model.state_variables,
+        "model": simulator.model,
         "lfp": np.asarray(lfp_values),
         "low": np.asarray(low),
         "high": np.asarray(high),
@@ -170,59 +175,13 @@ def run_simulation(config: SimulationConfig, potassium_ramp: bool = True):
 
 data = run_simulation(config)
 
-diagnose_chizhov(data)
+plot_chizhov_phase_portrait(data, data["model"])
+#diagnose_chizhov(data)
 plot_fig3(data)
 plot_population_diagnostics(data)
 plot_synaptic_resource(data)
 #plot_seizure_signals(data)
 
-states = data["states"]
-t = data["time"] / 1000.0
-
-K = states[:, 0, 0, 0]
-Na = states[:, 1, 0, 0]
-V = states[:, 2, 0, 0]
-D = states[:, 3, 0, 0]
-
-mask = t > 50
-
-print("Mean V:", V[mask].mean())
-print("Median V:", np.median(V[mask]))
-print("V percentiles:", np.percentile(V[mask], [5, 25, 50, 75, 95, 99]))
-
-nu = 100 * np.maximum(np.tanh((V - 25) / 20), 0)
-
-print("Mean D during firing:", D[mask & (nu > 0)].mean())
-print("Mean D during silence:", D[mask & (nu == 0)].mean())
-
-pump = 0.2 / (
-    (1.0 + np.exp(3.5 - K))
-    * (1.0 + np.exp((25.0 - Na) / 3.0))
-)
-
-mask = t > 50.0
-
-# Sodium fluxes in mM/s
-sodium_leak = (10.0 - Na) / 20.0
-sodium_pump = -3.0 * pump
-sodium_spikes = 0.03 * nu
-
-print("Sodium leak:", sodium_leak[mask].mean())
-print("Sodium pump:", sodium_pump[mask].mean())
-print("Sodium spikes:", sodium_spikes[mask].mean())
-print(
-    "Net sodium flux:",
-    (sodium_leak[mask] + sodium_pump[mask] + sodium_spikes[mask]).mean()
-)
-S = 5.0 * nu * (D - 0.5)
-
-active = mask & (nu > 0)
-
-print("Mean synaptic input during firing:", S[active].mean())
-print("Fraction of firing with D < 0.5:",
-      np.mean(D[active] < 0.5))
-print("Minimum D:", D[mask].min())
-print("Maximum D:", D[mask].max())
 #plot_state_space(data)
 plot_seizure_trajectory(data)
 plot_kbath(data)

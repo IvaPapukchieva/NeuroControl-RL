@@ -8,6 +8,7 @@ from prototype.config import SimulationConfig
 from prototype.epileptor import NagarajEpileptor, ChizhovEpileptor2
 from prototype.features import lfp
 from prototype.observer import ChizhovObserver
+from prototype.noise import ChizhovNoise
 
 class Simulator:
     def __init__(self, config: SimulationConfig):
@@ -41,12 +42,17 @@ class Simulator:
         # Infer model dimensions
         nvar = self.model.nvar
 
+        self.noise = ChizhovNoise(
+            noise_strength=30.0,
+            tau_m=10.0,
+            sample_interval=1.0,
+            duration_ms=config.simulation_length,
+            noise_seed=config.noise_seed,
+        )
+
         self.integrator = EulerStochastic(
             dt=config.step_size,
-            noise=Additive(
-                nsig=config.noise_array(nvar),
-                noise_seed=config.noise_seed,
-            ),
+            noise=self.noise,
         )
         self.integrator.configure()
         self.integrator.noise.dt = self.integrator.dt
