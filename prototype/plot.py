@@ -294,7 +294,6 @@ def plot_population_diagnostics(data):
 
     return fig, axes
 
-
 def diagnose_chizhov(data):
     states = data["states"]
     V = states[:, 2, 0, 0]
@@ -310,7 +309,6 @@ def diagnose_chizhov(data):
     print("Mean firing rate (Hz):", nu[mask].mean())
     print("Mean synaptic resource:", D[mask].mean())
     print("Fraction of time firing:", np.mean(nu[mask] > 0))
-
 
 def plot_fig3(data):
 
@@ -371,7 +369,6 @@ def plot_synaptic_resource(data, start=None, end=None):
 
     plt.tight_layout()
     plt.show()
-
 
 def plot_kbath(data):
 
@@ -451,42 +448,46 @@ def plot_chizhov_phase_portrait(data, model):
             np.tanh((v - V_th) / k_nu), 0.0
         )
 
+    def potassium_input(k):
+        return gK_ratio * 26.6 * np.log(k / K0)
+
     def vector_field(v, d, k=K_field):
         nu = firing_rate(v)
 
-        potassium_input = (
-            gK_ratio * 26.6 * np.log(k / K0)
-        )
-        synaptic_input = (
-            Gsyn_ratio * nu * (d - 0.5)
-        )
+        dv = (
+            -v
+            + potassium_input(k)
+            + Gsyn_ratio * nu * (d - 0.5)
+        ) / tau_m
 
-        dv = (-v + potassium_input + synaptic_input) / tau_m
-        dd = (1.0 - d) / tau_D - delta_D * d * nu / 1000.0
+        dd = (
+            (1.0 - d) / tau_D
+            - delta_D * d * nu / 1000.0
+        )
 
         return dv, dd
 
     # Deterministic vector field
-    V_grid = np.linspace(-30, 260, 38)
-    D_grid = np.linspace(0.5, 1.0, 22)
-    VV, DD = np.meshgrid(V_grid, D_grid)
+    V_grid = np.linspace(-30, 260, 200)
+    D_grid = np.linspace(0.5, 1.02, 120)
 
+    VV, DD = np.meshgrid(V_grid, D_grid)
     FV, FD = vector_field(VV, DD)
 
     # Normalize arrow lengths in display coordinates
 
-    norm = np.hypot(FV, FD)
+    # norm = np.hypot(FV, FD)
 
-    arrow_V = np.divide(
-        FV, norm,
-        out=np.zeros_like(FV),
-        where=norm > 0,
-    )
-    arrow_D = np.divide(
-        FD, norm,
-        out=np.zeros_like(FD),
-        where=norm > 0,
-    )
+    # arrow_V = np.divide(
+    #     FV, norm,
+    #     out=np.zeros_like(FV),
+    #     where=norm > 0,
+    # )
+    # arrow_D = np.divide(
+    #     FD, norm,
+    #     out=np.zeros_like(FD),
+    #     where=norm > 0,
+    # )
 
     # Nullclines
     V_line = np.linspace(-30, 260, 3000)
@@ -497,97 +498,171 @@ def plot_chizhov_phase_portrait(data, model):
         1.0 + tau_D * delta_D * nu_line / 1000.0
     )
 
-    # dV/dt = 0
-    D_V_null = np.full_like(V_line, np.nan)
-    D_V_null_shifted = np.full_like(V_line, np.nan)
+    def voltage_nullcline(k):
+        """
+        Complete dV/dt = 0 nullcline.
 
-    active = nu_line > 1e-8
+        For nu(V) > 0:
+            x_D = 0.5 + (V - potassium_input) / (Gsyn_ratio * nu)
 
-    potassium_input = (
-        gK_ratio * 26.6 * np.log(K_field / K0)
-    )
-    potassium_shift = (
-        gK_ratio * 26.6 * np.log(K_shifted / K0)
+        For nu(V) = 0:
+            V = potassium_input, independently of x_D.
+        """
+
+        shift = potassium_input(k)
+
+        D_active = np.full_like(V_line, np.nan)
+
+        active = nu_line > 1e-8
+
+        D_active[active] = (
+            0.5
+            + (V_line[active] - shift)
+            / (Gsyn_ratio * nu_line[active])
+        )
+
+        # Silent branch exists only below firing threshold
+        V_silent = shift if shift <= V_th else None
+
+        return D_active, V_silent
+
+    D_V_null, V_silent = voltage_nullcline(K_field)
+
+    D_V_null_shifted, V_silent_shifted = (
+        voltage_nullcline(K_shifted)
     )
 
-    D_V_null[active] = (
-        0.5
-        + (V_line[active] - potassium_input)
-        / (Gsyn_ratio * nu_line[active])
-    )
-    D_V_null_shifted[active] = (
-        0.5
-        + (V_line[active] - potassium_shift)
-        / (Gsyn_ratio * nu_line[active])
-    )
+    # ---------------------------------------------------------
+    # Figure
+    # ---------------------------------------------------------
 
-    # Plot
     fig, axes = plt.subplots(
-        1, 2,
+        1,
+        2,
         figsize=(15, 5.5),
         gridspec_kw={"width_ratios": [1.1, 1]},
     )
 
+    # ---------------------------------------------------------
     # Panel A: phase portrait
+    # ---------------------------------------------------------
+
     ax = axes[0]
 
-    ax.quiver(
-        VV, DD, arrow_V, arrow_D,
-        color="0.5",
-        angles="xy",
-        scale_units="xy",
-        scale=0.1,
-        width=0.002,
-        alpha=0.7,
+    # Curved deterministic flow trajectories
+    ax.streamplot(
+        V_grid,
+        D_grid,
+        FV,
+        FD,
+        color="0.85",
+        linewidth=0.7,
+        density=(1.2, 1.0),
+        arrowsize=0.8,
+        integration_direction="both",
+        maxlength=5.0,
+        broken_streamlines=False,
+        zorder=1,
     )
 
-    ax.plot(
-        V_line, D_null,
-        color="red", lw=2,
-        label=r"$\dot{x}_D=0$",
-    )
+    # Synaptic resource nullcline
+    # ax.plot(
+    #     V_line,
+    #     D_null,
+    #     color="red",
+    #     lw=2,
+    #     label=r"$\dot{x}_D=0$",
+    #     zorder=3,
+    # )
 
+    # Voltage nullcline: K_o = 3 mM, active branch
     ax.plot(
-        V_line, D_V_null,
-        color="darkred", lw=2,
+        V_line,
+        D_V_null,
+        color="darkred",
+        lw=2,
         label=rf"$\dot V=0,\ K_o={K_field:g}$",
+        zorder=3,
     )
 
+    # Voltage nullcline: K_o = 3 mM, silent branch
+    if V_silent is not None:
+        ax.plot(
+            [V_silent, V_silent],
+            [0.5, 1.02],
+            color="darkred",
+            lw=2,
+            zorder=3,
+        )
+
+    # Voltage nullcline: K_o = 13 mM, active branch
     ax.plot(
-        V_line, D_V_null_shifted,
-        color="red", ls="--", lw=2,
+        V_line,
+        D_V_null_shifted,
+        color="red",
+        ls="--",
+        lw=2,
         label=rf"$\dot V=0,\ K_o={K_shifted:g}$",
+        zorder=3,
     )
 
+    # Voltage nullcline: K_o = 13 mM, silent branch
+    if V_silent_shifted is not None:
+        ax.plot(
+            [V_silent_shifted, V_silent_shifted],
+            [0.5, 1.02],
+            color="red",
+            ls="--",
+            lw=2,
+            zorder=3,
+        )
+
+    # Stochastic trajectory from simulator
     ax.plot(
-        V[::10], D[::10],
-        color="purple", lw=0.5, alpha=0.6,
+        V[::10],
+        D[::10],
+        color="purple",
+        lw=0.5,
+        alpha=0.6,
         label="Stochastic trajectory",
-    )
-
-    ax.plot(
-        [potassium_shift, potassium_shift],
-        [0.5, 1.0],
-        color="red", ls="--", lw=2,
+        zorder=2,
     )
 
     ax.set_xlim(-30, 260)
     ax.set_ylim(0.5, 1.02)
+
     ax.set_xlabel("V (mV)")
     ax.set_ylabel(r"$x_D$")
     ax.set_title("A — Fast subsystem phase portrait")
+
     ax.legend(fontsize=8)
 
-    # Panel B: time series
+    # ---------------------------------------------------------
+    # Panel B: stochastic time series
+    # ---------------------------------------------------------
+
     ax = axes[1]
 
-    ax.plot(time, V, lw=0.5, label="V (mV)")
+    ax.plot(
+        time,
+        V,
+        lw=0.5,
+        label="V (mV)",
+    )
+
     ax.set_xlabel("Time (ms)")
     ax.set_ylabel("V (mV)")
     ax.set_title("B — Stochastic trajectory")
 
     ax2 = ax.twinx()
-    ax2.plot(time, D, color="purple", lw=1)
+
+    ax2.plot(
+        time,
+        D,
+        color="purple",
+        lw=1,
+    )
+
     ax2.set_ylabel(r"$x_D$")
     ax2.set_ylim(0.5, 1.02)
 
