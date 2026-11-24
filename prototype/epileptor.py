@@ -208,7 +208,6 @@ class ChizhovEpileptor2(Model):
     state_variables = ("K_o", "Na_i", "V", "x_D")
 
     _nvar = 4
-    nvar = Final(default=4)
 
     cvar = np.array([2], dtype=np.int32)
 
